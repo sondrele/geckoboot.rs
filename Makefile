@@ -59,6 +59,7 @@ PROJ_NAME=blinky
 CC=$(ARM_GCC_TOOLCHAIN)/bin/arm-none-eabi-gcc
 GDB=$(ARM_GCC_TOOLCHAIN)/bin/arm-none-eabi-gdb
 OBJCOPY=$(ARM_GCC_TOOLCHAIN)/bin/arm-none-eabi-objcopy
+AR=$(ARM_GCC_TOOLCHAIN)/bin/arm-none-eabi-ar
 FLASH=$(eACommander)
 
 CFLAGS  = -g -O0 -Wall -T$(LIB_PATH)/Device/SiliconLabs/EFM32GG/Source/GCC/efm32gg.ld
@@ -82,8 +83,10 @@ RUSTLIBFLAGS = -O -g --target $(TARGET) -L $(LIB_DIR) --cfg stage0 --out-dir $(L
 FLASHFLAGS = --verify --reset
 
 # add startup file to build
-SRCS += $(LIB_PATH)/Device/SiliconLabs/EFM32GG/Source/GCC/startup_efm32gg.s
+ASMS += $(LIB_PATH)/Device/SiliconLabs/EFM32GG/Source/GCC/startup_efm32gg.s
 OBJS = $(SRCS:.c=.o)
+OBJS += $(ASMS:.s=.o)
+
 
 .PHONY: proj
 
@@ -94,8 +97,17 @@ proj: $(OUT_DIR)/$(PROJ_NAME).elf
 $(OUT_DIR)/$(PROJ_NAME).s: $(PROJ_NAME).rs #$(OUT_DIR)/libcore.rlib $(OUT_DIR)/libcollections.rlib
 	$(RUSTC) $(RUSTFLAGS) $(PROJ_NAME).rs
 
-$(OUT_DIR)/$(PROJ_NAME).elf: $(SRCS) $(OUT_DIR)/$(PROJ_NAME).s
-	$(CC) -O0 $(CFLAGS) $^ -o $@
+lib/libemlib.a: $(OBJS)
+	$(AR) rcs $@ $^
+
+%.o: %.s
+	$(CC) -O0 $(CFLAGS) -c $^ -o $@
+
+%.o: %.c
+	$(CC) -O0 $(CFLAGS) -c $^ -o $@
+
+$(OUT_DIR)/$(PROJ_NAME).elf: $(OUT_DIR)/$(PROJ_NAME).s lib/libemlib.a
+	$(CC) -O0 $(CFLAGS) -L ./lib -lemlib $< -o $@
 	$(OBJCOPY) -O ihex $(OUT_DIR)/$(PROJ_NAME).elf $(OUT_DIR)/$(PROJ_NAME).hex
 	$(OBJCOPY) -O binary $(OUT_DIR)/$(PROJ_NAME).elf $(OUT_DIR)/$(PROJ_NAME).bin
 
